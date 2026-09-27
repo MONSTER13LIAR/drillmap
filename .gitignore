@@ -7,3 +7,5 @@ data/
 test-results/
 screens/
 *.tsbuildinfo
+.vercel
+.env*

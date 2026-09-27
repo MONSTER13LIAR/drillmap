@@ -140,5 +140,10 @@ function fileStore(dir) {
 export function makeStore() {
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL
   if (url) return pgStore(url)
+  if (process.env.VERCEL) {
+    // serverless disks are read-only and wiped between requests: refuse rather than lose a drill
+    const fail = async () => { throw Object.assign(new Error('Database not connected'), { status: 503 }) }
+    return new Proxy({}, { get: () => fail })
+  }
   return fileStore(process.env.DATA_DIR || path.join(process.cwd(), 'data'))
 }

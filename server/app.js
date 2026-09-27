@@ -100,5 +100,5 @@ app.post('/api/drills/:code/:action', wrap(async (req, res, next) => {
 
 app.use((err, _req, res, _next) => {
   console.error(err)
-  res.status(500).send('Server error')
+  res.status(err.status || 500).send(err.status ? err.message : 'Server error')
 })
