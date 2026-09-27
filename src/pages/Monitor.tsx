@@ -15,6 +15,7 @@ export function Monitor({ code }: { code: string }) {
   const [queue, setQueue] = useState<Queued[]>(() => {
     try { return JSON.parse(localStorage.getItem(key + ':q') || '[]') } catch { return [] }
   })
+  const [sent, setSent] = useState<Queued[]>([]) // accepted by the server, maybe not in the last poll yet
   const flushing = useRef(false)
   useTick(250)
 
@@ -43,6 +44,8 @@ export function Monitor({ code }: { code: string }) {
         let rest = [...queue]
         while (rest.length) {
           await postEvent(code, rest[0])
+          const done = rest[0]
+          setSent((x) => [...x, done])
           rest = rest.slice(1)
           setQueue(rest)
         }
@@ -83,7 +86,7 @@ export function Monitor({ code }: { code: string }) {
   }
 
   const me = drill.expected[roomId]
-  const mine = [...drill.events.filter((e) => e.roomId === roomId), ...queue.filter((q) => q.roomId === roomId)]
+  const mine = [...drill.events.filter((e) => e.roomId === roomId), ...sent.filter((q) => q.roomId === roomId), ...queue.filter((q) => q.roomId === roomId)]
   const has = (t: DrillEventType) => mine.some((e) => e.type === t)
   const at = (t: DrillEventType) => [...mine].reverse().find((e) => e.type === t)?.at
   const now = serverNow()

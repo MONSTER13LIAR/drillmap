@@ -6,7 +6,7 @@ import type { Drill, School } from '../lib/types'
 import { useDrill } from '../lib/useDrill'
 
 export function Report({ code }: { code: string }) {
-  const { drill, error } = useDrill(code)
+  const { drill, error } = useDrill(code, 10000)
   const [school, setSchool] = useState<School | null>(null)
   const [prev, setPrev] = useState<Drill | null>(null)
 

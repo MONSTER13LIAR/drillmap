@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { getDrill, subscribe } from './api'
+import { getDrill } from './api'
 import type { Drill } from './types'
 
-// Live drill state over server-sent events, with the offset between this device's clock and the server's.
-export function useDrill(code: string) {
+// Live drill state by polling (works on serverless hosting), plus the offset between this device's clock and the server's.
+export function useDrill(code: string, everyMs = 1500) {
   const [drill, setDrill] = useState<Drill | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [online, setOnline] = useState(true)
@@ -11,30 +11,33 @@ export function useDrill(code: string) {
 
   useEffect(() => {
     let live = true
-    getDrill(code)
-      .then((d) => {
+    let timer: number | undefined
+    let first = true
+    const load = async () => {
+      try {
+        const t0 = Date.now()
+        const d = await getDrill(code)
         if (!live) return
-        offset.current = d.now - Date.now()
+        // server time at the midpoint of the request
+        offset.current = d.now - (t0 + Date.now()) / 2
         setDrill(d)
-      })
-      .catch((e) => live && setError(String(e.message || e)))
-    const stop = subscribe(code, (d) => {
-      if (!live) return
-      if (d.now) offset.current = d.now - Date.now()
-      setOnline(true)
-      setDrill(d)
-    })
-    const off = () => setOnline(false)
-    const on = () => setOnline(true)
-    window.addEventListener('offline', off)
-    window.addEventListener('online', on)
+        setOnline(true)
+        setError(null)
+      } catch (e: any) {
+        if (!live) return
+        if (first) setError(String(e?.message || e))
+        else setOnline(false)
+      } finally {
+        first = false
+        if (live) timer = window.setTimeout(load, document.hidden ? everyMs * 4 : everyMs)
+      }
+    }
+    load()
     return () => {
       live = false
-      stop()
-      window.removeEventListener('offline', off)
-      window.removeEventListener('online', on)
+      window.clearTimeout(timer)
     }
-  }, [code])
+  }, [code, everyMs])
 
   const serverNow = () => Date.now() + offset.current
   return { drill, setDrill, error, online, serverNow }

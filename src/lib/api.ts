@@ -80,15 +80,3 @@ export async function drillAction(code: string, action: 'start' | 'end' | 'reset
 export async function postEvent(code: string, ev: Omit<DrillEvent, 'id' | 'at'> & { at?: number }): Promise<DrillEvent> {
   return j(await fetch(`/api/drills/${code}/events`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(ev) }))
 }
-
-export function subscribe(code: string, onDrill: (d: Drill & { now?: number }) => void): () => void {
-  const es = new EventSource(`/api/drills/${code}/stream`)
-  es.onmessage = (m) => {
-    try {
-      onDrill(JSON.parse(m.data))
-    } catch {
-      /* ignore malformed frame */
-    }
-  }
-  return () => es.close()
-}
