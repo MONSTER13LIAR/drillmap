@@ -23,6 +23,7 @@ interface Props {
   onMove?: (x: number, y: number) => void
   onUp?: () => void
   scaleLine?: [number, number, number, number] | null
+  flow?: boolean // animate people moving along the routes
 }
 
 const R = { room: 26, junction: 7, stair: 20, exit: 18, assembly: 30 }
@@ -144,6 +145,7 @@ export function MapView(p: Props) {
         {routeLines.map((s) => (
           <path key={s.key} d={s.d} className={`route ${s.hot ? 'hot' : ''}`} markerMid={s.hot ? 'url(#arrowhot)' : 'url(#arrow)'} />
         ))}
+        {p.flow && routeLines.map((s) => <path key={'f' + s.key} d={s.d} className="route-flow" />)}
         {p.scaleLine && <line x1={p.scaleLine[0]} y1={p.scaleLine[1]} x2={p.scaleLine[2]} y2={p.scaleLine[3]} stroke="var(--alert)" strokeWidth={3} strokeDasharray="4 4" />}
         {nodes.map((n) => (
           <g
