@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { MapView } from '../components/MapView'
+import { usePlan } from '../lib/usePlan'
 import { deleteSchool, listSchools, saveSchool } from '../lib/api'
 import { demoSchool } from '../lib/demo'
 import { uid } from '../lib/id'
@@ -7,6 +9,9 @@ import { DEFAULT_SETTINGS, type School } from '../lib/types'
 export function Home() {
   const [schools, setSchools] = useState<{ id: string; name: string; updatedAt: number }[] | null>(null)
   const [name, setName] = useState('')
+  const demo = useMemo(() => demoSchool(), [])
+  const demoPlan = usePlan(demo)
+  const ground = [...demo.floors].sort((a, b) => a.level - b.level)[0]
 
   useEffect(() => {
     listSchools().then(setSchools)
@@ -37,11 +42,19 @@ export function Home() {
       </header>
       <main className="page">
         <section className="hero">
+          <div className="hero-text">
           <h1>Every class knows its way out. Then you prove it with a timed drill.</h1>
           <p>
             Walk your school once with a phone. Drillmap works out each class's route and the order classes take each staircase, prints the
             evacuation map for every floor, and times a real mock drill from the monitors' phones.
           </p>
+          </div>
+          {demoPlan && (
+            <figure className="hero-map">
+              <MapView school={demo} floorId={ground.id} routes={demoPlan.current.groups.map((g) => ({ route: g.route }))} />
+              <figcaption className="small faint">The demo school's ground floor. Arrows are each class's worked-out way to the playground.</figcaption>
+            </figure>
+          )}
           <div className="steps4">
             <div><div className="n">01</div><h3>Map</h3><p className="small muted">Photo of the floor plan, tap rooms, stairs and exits, walk each corridor to measure it.</p></div>
             <div><div className="n">02</div><h3>Plan</h3><p className="small muted">Plain arithmetic: walking speed, stair width, who queues behind whom.</p></div>

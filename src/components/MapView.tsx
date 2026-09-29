@@ -76,7 +76,7 @@ export function MapView(p: Props) {
   const byId = new Map(p.school.nodes.map((n) => [n.id, n]))
   const edges = p.school.edges.filter((e) => ids.has(e.a) && ids.has(e.b))
 
-  const toLocal = (e: React.PointerEvent) => {
+  const toLocal = (e: React.PointerEvent | React.MouseEvent) => {
     const svg = ref.current!
     const pt = svg.createSVGPoint()
     pt.x = e.clientX
@@ -103,11 +103,12 @@ export function MapView(p: Props) {
   const routeLines = [...segMap.entries()].map(([key, v]) => ({ key, ...v }))
 
   return (
-    <div className="mapwrap">
+    <div className={`mapwrap ${p.interactive ? 'edit' : ''}`}>
       <svg
         ref={ref}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        onPointerDown={(e) => {
+        onClick={(e) => {
+          // click, not pointerdown: a finger panning the map on a phone must not drop a point
           if (!p.interactive) return
           if ((e.target as Element).closest('[data-node],[data-edge]')) return
           const [x, y] = toLocal(e)
@@ -149,7 +150,7 @@ export function MapView(p: Props) {
             key={n.id}
             data-node
             transform={`translate(${n.x} ${n.y})`}
-            style={{ cursor: p.interactive ? 'pointer' : 'default' }}
+            style={{ cursor: p.interactive ? 'pointer' : 'default', touchAction: p.interactive ? 'none' : undefined }}
             onPointerDown={(e) => {
               if (!p.interactive) return
               e.stopPropagation()

@@ -20,6 +20,22 @@ const TOOLS: [Tool, string, string, string][] = [
   ['delete', 'Delete', 'X', 'Click a point or a connection to remove it.'],
 ]
 
+const I = (d: string) => (
+  <svg className="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
+)
+const ICON: Record<Tool, React.ReactNode> = {
+  select: I('M5 3l6 16 2.2-6.8L20 10z'),
+  room: I('M4 6h16v12H4zM9 18v-5h6v5'),
+  junction: I('M12 4v16M4 12h16M12 12m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0'),
+  stair: I('M4 19h5v-5h5V9h5V4'),
+  exit: I('M10 4H5v16h5M14 8l4 4-4 4M18 12H9'),
+  assembly: I('M12 12m-8 0a8 8 0 1 0 16 0a8 8 0 1 0-16 0M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0'),
+  connect: I('M6 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M18 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M7.5 16.5l9-9'),
+  scale: I('M3 17L17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2'),
+  delete: I('M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13'),
+}
+const SHORT: Record<Tool, string> = { select: 'Move', room: 'Class', junction: 'Corridor', stair: 'Stairs', exit: 'Exit', assembly: 'Assembly', connect: 'Connect', scale: 'Scale', delete: 'Delete' }
+
 async function compress(file: File): Promise<string> {
   const img = await createImageBitmap(file)
   const max = 1400
@@ -182,33 +198,38 @@ export function Editor({ id }: { id: string }) {
 
   return (
     <div className="editor">
-      <aside className="stack">
-        <div className="card stack" style={{ padding: 12 }}>
+      <aside className="stack left">
+        <div className="card stack schoolcard" style={{ padding: 12 }}>
           <label className="field">
             School
             <input value={school.name} onChange={(e) => update((s) => ({ ...s, name: e.target.value }))} />
           </label>
-          <span className="small faint">{saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : saving === 'offline' ? 'Saved on this device only' : ''}</span>
         </div>
-        <div className="card" style={{ padding: 8 }}>
+        <div className="card dock" style={{ padding: 8 }}>
           <div className="toolbar">
             {TOOLS.map(([t, l, k]) => (
-              <button key={t} className={`tool ${tool === t ? 'on' : ''}`} onClick={() => { setTool(t); setPending(null); setScalePts(null) }}>
-                {l}
+              <button key={t} title={`${l} (${k})`} className={`tool ${tool === t ? 'on' : ''}`} onClick={() => { setTool(t); setPending(null); setScalePts(null) }}>
+                {ICON[t]}
+                <span className="tl">{l}</span>
+                <span className="ts">{SHORT[t]}</span>
                 <span className="k">{k}</span>
               </button>
             ))}
           </div>
         </div>
-        <div className="card stack" style={{ padding: 12 }}>
-          <h3>Floors</h3>
-          {[...school.floors].sort((a, b) => b.level - a.level).map((f) => (
-            <button key={f.id} className={`tool ${f.id === floor.id ? 'on' : ''}`} onClick={() => { setFloorId(f.id); setSel(null); setPending(null) }}>
-              {f.name}
-              <span className="k">{school.nodes.filter((n) => n.floorId === f.id && n.kind === 'room').length} rooms</span>
-            </button>
-          ))}
+      </aside>
+
+      <section className="canvas">
+        <div className="floorbar">
+          <div className="segs" role="tablist" aria-label="Floors">
+            {[...school.floors].sort((a, b) => b.level - a.level).map((f) => (
+              <button key={f.id} role="tab" aria-selected={f.id === floor.id} className={`seg ${f.id === floor.id ? 'on' : ''}`} onClick={() => { setFloorId(f.id); setSel(null); setPending(null) }}>
+                {f.name}
+                <span className="n">{school.nodes.filter((n) => n.floorId === f.id && n.kind === 'room').length}</span>
+              </button>
+            ))}
           <button
+            className="seg add" title="Add a floor above"
             onClick={() => {
               const level = Math.max(...school.floors.map((f) => f.level)) + 1
               const nf = { id: uid('f'), name: level === 1 ? 'First floor' : level === 2 ? 'Second floor' : level === 3 ? 'Third floor' : `Floor ${level}`, level, pxPerMeter: floor.pxPerMeter }
@@ -221,12 +242,11 @@ export function Editor({ id }: { id: string }) {
               setFloorId(nf.id)
             }}
           >
-            + Add floor above
+            + Floor
           </button>
+          </div>
+          <span className="small faint save">{saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : saving === 'offline' ? 'Saved on this device only' : ''}</span>
         </div>
-      </aside>
-
-      <section>
         <div className="hint">
           <b>{floor.name}</b> · {hint}
           {tool === 'connect' && pending && <> · from <b>{nodeLabel(school.nodes.find((n) => n.id === pending)!)}</b></>}
@@ -265,14 +285,14 @@ export function Editor({ id }: { id: string }) {
         </div>
       </section>
 
-      <aside className="stack">
+      <aside className="stack right">
         {selNode && (
           <div className="card stack">
             <h3>{selNode.kind === 'room' ? 'Classroom' : selNode.kind === 'stair' ? 'Staircase' : selNode.kind === 'exit' ? 'Exit' : selNode.kind === 'assembly' ? 'Assembly point' : 'Corridor point'}</h3>
             {selNode.kind !== 'stair' && (
               <label className="field">
                 Name
-                <input value={selNode.label} onChange={(e) => setNode(selNode.id, { label: e.target.value })} autoFocus />
+                <input value={selNode.label} onChange={(e) => setNode(selNode.id, { label: e.target.value })} autoFocus={matchMedia("(pointer: fine)").matches} />
               </label>
             )}
             {selNode.kind === 'room' && (
