@@ -54,7 +54,8 @@ export function Monitor({ code }: { code: string }) {
           const done = rest[0]
           setSent((x) => [...x, done])
           rest = rest.slice(1)
-          setQueue(rest)
+          // drop only what was sent: a tap made while this request was in flight must stay queued
+          setQueue((x) => x.filter((q) => q !== done))
         }
       } catch {
         /* offline: try again shortly */
