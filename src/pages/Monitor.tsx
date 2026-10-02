@@ -21,6 +21,8 @@ export function Monitor({ code }: { code: string }) {
   })
   const [sent, setSent] = useState<Queued[]>([]) // accepted by the server, maybe not in the last poll yet
   const flushing = useRef(false)
+  const queueRef = useRef(queue)
+  queueRef.current = queue
   useTick(250)
 
   useEffect(() => {
@@ -107,12 +109,15 @@ export function Monitor({ code }: { code: string }) {
   const lastStep = (['headcount', 'arrived', 'left'] as DrillEventType[]).find((ty) => has(ty))
   const undo = async () => {
     if (!lastStep || undoing) return
-    const queued = queue.filter((q) => q.roomId === roomId && q.type === lastStep)
-    if (queued.length) {
+    setUndoing(true)
+    // a tap may be on its way to the server right now: let that send finish first, or the undo misses it
+    for (let i = 0; i < 40 && flushing.current; i++) await new Promise((r) => setTimeout(r, 150))
+    const stillQueued = queueRef.current.some((q) => q.roomId === roomId && q.type === lastStep)
+    if (stillQueued && !flushing.current) {
       setQueue((x) => x.filter((q) => !(q.roomId === roomId && q.type === lastStep)))
+      setUndoing(false)
       return
     }
-    setUndoing(true)
     try {
       await undoLast(code, roomId)
       setSent((x) => x.filter((q) => !(q.roomId === roomId && q.type === lastStep)))
