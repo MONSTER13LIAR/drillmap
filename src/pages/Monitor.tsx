@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ping, postEvent } from '../lib/api'
+import { getDrill, ping, postEvent, undoLast } from '../lib/api'
+import { LangToggle, routeText, T, useLang } from '../lib/i18n'
 import { fmt } from '../lib/graph'
 import type { DrillEventType } from '../lib/types'
 import { useDrill, useTick } from '../lib/useDrill'
@@ -8,7 +9,10 @@ type Queued = { type: DrillEventType; roomId: string; at: number; present?: numb
 
 // The monitor's phone. Big buttons, works one-handed, keeps taps if the network drops.
 export function Monitor({ code }: { code: string }) {
-  const { drill, error, online, serverNow } = useDrill(code)
+  const { drill, setDrill, error, online, serverNow } = useDrill(code)
+  const [lang, setLang] = useLang()
+  const t = T[lang]
+  const [undoing, setUndoing] = useState(false)
   const key = `drillmap:m:${code}`
   const [roomId, setRoomId] = useState<string | null>(() => localStorage.getItem(key))
   const [present, setPresent] = useState<number | null>(null)
@@ -60,8 +64,8 @@ export function Monitor({ code }: { code: string }) {
     return () => window.clearInterval(i)
   }, [queue, code])
 
-  if (error) return <div className="phone"><h2>Drill not found</h2><p className="muted">Check the code with your teacher: {code}</p></div>
-  if (!drill) return <div className="phone"><p className="muted">Connecting…</p></div>
+  if (error) return <div className="phone"><LangToggle lang={lang} set={setLang} /><h2>{t.notFound}</h2><p className="muted">{t.checkCode} {code}</p></div>
+  if (!drill) return <div className="phone"><p className="muted">{t.connecting}</p></div>
 
   const classes = Object.entries(drill.expected).sort((a, b) => a[1].label.localeCompare(b[1].label, undefined, { numeric: true }))
   if (!roomId || !drill.expected[roomId]) {
@@ -69,9 +73,10 @@ export function Monitor({ code }: { code: string }) {
     for (const c of classes) byFloor.set(c[1].floor, [...(byFloor.get(c[1].floor) || []), c])
     return (
       <div className="phone">
+        <LangToggle lang={lang} set={setLang} />
         <div>
-          <div className="small faint">{drill.schoolName} · drill {code}</div>
-          <h1 style={{ fontSize: 28 }}>Which class are you the monitor for?</h1>
+          <div className="small faint">{drill.schoolName} · {t.drill} {code}</div>
+          <h1 style={{ fontSize: 28 }}>{t.pickClass}</h1>
         </div>
         {[...byFloor.entries()].map(([floor, list]) => (
           <div key={floor} className="stack" style={{ gap: 8 }}>
@@ -98,21 +103,49 @@ export function Monitor({ code }: { code: string }) {
     setQueue((x) => [...x, q])
   }
 
+  // take back the latest step: drop it from the send queue if it never left this phone, else ask the server
+  const lastStep = (['headcount', 'arrived', 'left'] as DrillEventType[]).find((ty) => has(ty))
+  const undo = async () => {
+    if (!lastStep || undoing) return
+    const queued = queue.filter((q) => q.roomId === roomId && q.type === lastStep)
+    if (queued.length) {
+      setQueue((x) => x.filter((q) => !(q.roomId === roomId && q.type === lastStep)))
+      return
+    }
+    setUndoing(true)
+    try {
+      await undoLast(code, roomId)
+      setSent((x) => x.filter((q) => !(q.roomId === roomId && q.type === lastStep)))
+      setDrill(await getDrill(code))
+      if (lastStep === 'headcount') setPresent(null)
+    } catch {
+      alert(lang === 'hi' ? 'अभी रद्द नहीं हो सका। नेटवर्क जाँचें।' : 'Could not undo right now. Check the network.')
+    } finally {
+      setUndoing(false)
+    }
+  }
+  const undoBtn = lastStep && !drill.endedAt && (
+    <button className="ghost undo" disabled={undoing} onClick={undo}>↶ {t.undo}</button>
+  )
+
   const header = (
+    <>
+    <LangToggle lang={lang} set={setLang} />
     <div className="row" style={{ justifyContent: 'space-between' }}>
       <div>
         <div className="small faint">{drill.schoolName}</div>
         <h2 style={{ fontSize: 30 }}>{me.label}</h2>
       </div>
       <div style={{ textAlign: 'right' }}>
-        <span className={`pill ${online && !queue.length ? 'ok' : 'warn'}`}>{online && !queue.length ? 'connected' : queue.length ? `${queue.length} tap(s) waiting to send` : 'offline'}</span>
-        {!drill.startedAt && <div><button className="ghost small" onClick={() => setRoomId(null)}>change class</button></div>}
+        <span className={`pill ${online && !queue.length ? 'ok' : 'warn'}`}>{online && !queue.length ? t.connected : queue.length ? t.waiting(queue.length) : t.offline}</span>
+        {!drill.startedAt && <div><button className="ghost small" onClick={() => setRoomId(null)}>{t.changeClass}</button></div>}
       </div>
     </div>
+    </>
   )
 
   if (drill.endedAt && !has('arrived'))
-    return <div className="phone">{header}<div className="card"><h3>The drill has ended.</h3><p className="muted small">Your class was not marked as reaching the assembly point.</p></div></div>
+    return <div className="phone">{header}<div className="card"><h3>{t.ended}</h3><p className="muted small">{t.notReached}</p></div></div>
 
   if (!drill.startedAt)
     return (
@@ -120,11 +153,11 @@ export function Monitor({ code }: { code: string }) {
         {header}
         <div className="card stack" style={{ textAlign: 'center', padding: 28 }}>
           <div className="done-tick" style={{ background: 'var(--ink)' }}>✓</div>
-          <h2>You're in. Wait for the alarm.</h2>
-          <p className="muted">Keep this screen open. When the alarm rings, the clock starts here by itself.</p>
+          <h2>{t.youreIn}</h2>
+          <p className="muted">{t.keepOpen}</p>
         </div>
         <div className="card small">
-          <b>Your route:</b> {me.via}
+          <b>{t.yourRoute}</b> {routeText(me.via, lang)}
         </div>
       </div>
     )
@@ -135,13 +168,13 @@ export function Monitor({ code }: { code: string }) {
     <div className="phone">
       {header}
       <div className="clock">{fmt(elapsed)}</div>
-      <p className="small muted" style={{ textAlign: 'center', marginTop: -8 }}>since the alarm</p>
+      <p className="small muted" style={{ textAlign: 'center', marginTop: -8 }}>{t.sinceAlarm}</p>
 
       {!has('left') && (
         <>
-          <div className="card small"><b>Route:</b> {me.via}</div>
+          <div className="card small"><b>{t.route}</b> {routeText(me.via, lang)}</div>
           <button className="primary big" style={{ padding: 32, fontSize: 22 }} onClick={() => tap('left')}>
-            Our class has left the room
+            {t.left}
           </button>
         </>
       )}
@@ -149,10 +182,10 @@ export function Monitor({ code }: { code: string }) {
       {has('left') && !has('arrived') && (
         <>
           <div className="card small">
-            Left at <span className="mono">{fmt(((leftAt || 0) - drill.startedAt) / 1000)}</span> · <b>Go:</b> {me.via}
+            {t.leftAt} <span className="mono">{fmt(((leftAt || 0) - drill.startedAt) / 1000)}</span> · <b>{t.go}</b> {routeText(me.via, lang)}
           </div>
           <button className="primary big" style={{ padding: 32, fontSize: 22 }} onClick={() => tap('arrived')}>
-            We reached {drill.assembly || 'the assembly point'}
+            {t.reached(drill.assembly && drill.assembly !== 'the assembly point' ? drill.assembly : t.assemblyDefault)}
           </button>
         </>
       )}
@@ -160,16 +193,16 @@ export function Monitor({ code }: { code: string }) {
       {has('arrived') && !has('headcount') && (
         <div className="card stack">
           <p>
-            Reached in <b className="mono">{fmt(((arrivedAt || 0) - drill.startedAt) / 1000)}</b>. Now count your class.
+            {t.reachedIn} <b className="mono">{fmt(((arrivedAt || 0) - drill.startedAt) / 1000)}</b>. {t.countNow}
           </p>
           <div className="stepper">
             <button onClick={() => setPresent((p) => Math.max(0, (p ?? me.headcount) - 1))}>−</button>
             <div className="n">{present ?? me.headcount}</div>
             <button onClick={() => setPresent((p) => (p ?? me.headcount) + 1)}>+</button>
           </div>
-          <p className="small muted" style={{ textAlign: 'center' }}>of {me.headcount} on the list</p>
+          <p className="small muted" style={{ textAlign: 'center' }}>{t.ofList(me.headcount)}</p>
           <button className="primary big" onClick={() => tap('headcount', { present: present ?? me.headcount })}>
-            Send headcount
+            {t.sendCount}
           </button>
         </div>
       )}
@@ -179,14 +212,15 @@ export function Monitor({ code }: { code: string }) {
         return (
           <div className="card stack" style={{ textAlign: 'center', padding: 28 }}>
             <div className="done-tick">✓</div>
-            <h2>Done</h2>
+            <h2>{t.done}</h2>
             <p className="muted">
-              Out in <span className="mono">{fmt(((arrivedAt || 0) - drill.startedAt) / 1000)}</span> · {p} of {me.headcount} counted
+              {t.outIn} <span className="mono">{fmt(((arrivedAt || 0) - drill.startedAt) / 1000)}</span> · {t.counted(p, me.headcount)}
             </p>
-            {p < me.headcount && <p style={{ color: 'var(--alert)' }}>Tell your teacher now: {me.headcount - p} not counted.</p>}
+            {p < me.headcount && <p style={{ color: 'var(--alert)' }}>{t.tellTeacher(me.headcount - p)}</p>}
           </div>
         )
       })()}
+      {undoBtn}
     </div>
   )
 }

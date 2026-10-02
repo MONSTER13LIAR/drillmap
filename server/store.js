@@ -8,6 +8,7 @@ const SCHEMA = [
   `create index if not exists drills_school on drills (school_id)`,
   `create table if not exists drill_events (id text primary key, code text not null, type text not null, room_id text not null, at bigint not null, present int)`,
   `create unique index if not exists drill_events_once on drill_events (code, room_id, type) where type <> 'headcount'`,
+  `alter table drill_events add column if not exists by text`,
   `create table if not exists drill_presence (code text not null, room_id text not null, seen_at bigint not null, primary key (code, room_id))`,
 ]
 
@@ -23,7 +24,7 @@ function pgStore(url) {
   }
   const assemble = async (q, row) => {
     if (!row) return null
-    const events = await q.query(`select id, type, room_id, at, present from drill_events where code = $1 order by at, id`, [row.code])
+    const events = await q.query(`select id, type, room_id, at, present, by from drill_events where code = $1 order by at, id`, [row.code])
     const pres = await q.query(`select room_id, seen_at from drill_presence where code = $1`, [row.code])
     return {
       ...row.data,
@@ -32,7 +33,7 @@ function pgStore(url) {
       createdAt: Number(row.created_at),
       startedAt: row.started_at == null ? undefined : Number(row.started_at),
       endedAt: row.ended_at == null ? undefined : Number(row.ended_at),
-      events: events.map((e) => ({ id: e.id, type: e.type, roomId: e.room_id, at: Number(e.at), ...(e.present == null ? {} : { present: e.present }) })),
+      events: events.map((e) => ({ id: e.id, type: e.type, roomId: e.room_id, at: Number(e.at), ...(e.present == null ? {} : { present: e.present }), ...(e.by ? { by: e.by } : {}) })),
       presence: Object.fromEntries(pres.map((p) => [p.room_id, Number(p.seen_at)])),
     }
   }
@@ -84,7 +85,13 @@ function pgStore(url) {
     async addEvent(code, ev) {
       const q = await sql()
       // the unique index keeps only the first left / arrived tap per class
-      await q.query(`insert into drill_events (id, code, type, room_id, at, present) values ($1, $2, $3, $4, $5, $6) on conflict do nothing`, [ev.id, code, ev.type, ev.roomId, ev.at, ev.present ?? null])
+      await q.query(`insert into drill_events (id, code, type, room_id, at, present, by) values ($1, $2, $3, $4, $5, $6, $7) on conflict do nothing`, [ev.id, code, ev.type, ev.roomId, ev.at, ev.present ?? null, ev.by ?? null])
+    },
+    async undoLast(code, roomId) {
+      const q = await sql()
+      // the latest step of this class: headcount, then reached, then left
+      const r = await q.query(`delete from drill_events where id = (select id from drill_events where code = $1 and room_id = $2 order by case type when 'headcount' then 3 when 'arrived' then 2 else 1 end desc, at desc, id desc limit 1) returning id, type`, [code, roomId])
+      return r[0] || null
     },
     async touch(code, roomId, at) {
       const q = await sql()
@@ -127,6 +134,16 @@ function fileStore(dir) {
       if (ev.type !== 'headcount' && d.events.some((e) => e.roomId === ev.roomId && e.type === ev.type)) return
       d.events.push(ev)
       write('drills', code, d)
+    },
+    async undoLast(code, roomId) {
+      const d = read('drills', code)
+      if (!d) return null
+      const rank = { headcount: 3, arrived: 2, left: 1 }
+      const mine = d.events.filter((e) => e.roomId === roomId).sort((a, b) => rank[b.type] - rank[a.type] || b.at - a.at)
+      if (!mine.length) return null
+      d.events = d.events.filter((e) => e.id !== mine[0].id)
+      write('drills', code, d)
+      return { id: mine[0].id, type: mine[0].type }
     },
     async touch(code, roomId, at) {
       const d = read('drills', code)

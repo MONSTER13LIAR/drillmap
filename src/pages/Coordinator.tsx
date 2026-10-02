@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import { MapView, type NodeStatus } from '../components/MapView'
-import { drillAction, getSchool } from '../lib/api'
+import { drillAction, getDrill, getSchool, postEvent, undoLast } from '../lib/api'
 import { fmt } from '../lib/graph'
-import type { School } from '../lib/types'
+import type { DrillEventType, School } from '../lib/types'
 import { useDrill, useTick } from '../lib/useDrill'
 import { classRows } from '../lib/report'
 
@@ -58,6 +58,34 @@ export function Coordinator({ code }: { code: string }) {
     if (a === 'end') location.hash = `#/d/${code}/report`
   }
 
+  // a monitor's phone has gone quiet: the coordinator marks the class from what they see or hear on the radio
+  const live = !!drill.startedAt && !drill.endedAt
+  const byHand = (roomId: string) => drill.events.some((e) => e.roomId === roomId && e.by === 'coordinator')
+  const mark = async (roomId: string, type: DrillEventType, headcount: number) => {
+    let present: number | undefined
+    if (type === 'headcount') {
+      const v = prompt('How many counted at the assembly point?', String(headcount))
+      if (v == null) return
+      present = Number(v)
+      if (!Number.isFinite(present) || present < 0) return alert('Type a number.')
+    }
+    try {
+      await postEvent(code, { type, roomId, present, by: 'coordinator' })
+      setDrill(await getDrill(code))
+    } catch (e) {
+      alert(`Could not save: ${(e as Error).message}`)
+    }
+  }
+  const unmark = async (roomId: string) => {
+    if (!confirm('Take back the last step for this class?')) return
+    try {
+      await undoLast(code, roomId)
+      setDrill(await getDrill(code))
+    } catch (e) {
+      alert(`Could not undo: ${(e as Error).message}`)
+    }
+  }
+
   const floors = school ? [...school.floors].sort((a, b) => b.level - a.level) : []
 
   return (
@@ -108,20 +136,30 @@ export function Coordinator({ code }: { code: string }) {
         )}
 
         {drill.startedAt && (
-          <div className="card flat">
+          <div className="card flat" style={{ overflowX: 'auto' }}>
             <table>
               <thead>
-                <tr><th>Class</th><th>Route</th><th className="num">Left</th><th className="num">Reached</th><th className="num">Plan</th><th className="num">Counted</th></tr>
+                <tr><th>Class</th><th>Route</th><th className="num">Left</th><th className="num">Reached</th><th className="num">Plan</th><th className="num">Counted</th>{live && <th className="num">Mark by hand</th>}</tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.roomId}>
-                    <td><b>{r.label}</b> <span className="small faint">{r.floor}</span></td>
+                    <td><b>{r.label}</b> <span className="small faint">{r.floor}</span>{byHand(r.roomId) && <span className="byhand" title="Marked on this screen, not by the class monitor">by hand</span>}</td>
                     <td className="small">{r.via}</td>
                     <td className="num">{r.leftSec != null ? fmt(r.leftSec) : '–'}</td>
                     <td className="num" style={{ color: r.deltaSec != null && r.deltaSec > 30 ? 'var(--alert)' : undefined }}>{r.arrivedSec != null ? fmt(r.arrivedSec) : '–'}</td>
                     <td className="num faint">{fmt(r.expectedSec)}</td>
                     <td className="num" style={{ color: r.present != null && r.present < r.headcount ? 'var(--alert)' : undefined }}>{r.present != null ? `${r.present}/${r.headcount}` : '–'}</td>
+                    {live && (
+                      <td>
+                        <div className="markbtns">
+                          {r.leftSec == null && <button onClick={() => mark(r.roomId, 'left', r.headcount)}>Mark left</button>}
+                          {r.leftSec != null && r.arrivedSec == null && <button onClick={() => mark(r.roomId, 'arrived', r.headcount)}>Mark reached</button>}
+                          {r.arrivedSec != null && r.present == null && <button onClick={() => mark(r.roomId, 'headcount', r.headcount)}>Mark count</button>}
+                          {(r.leftSec != null || r.arrivedSec != null || r.present != null) && <button className="ghost" title="Take back the last step" onClick={() => unmark(r.roomId)}>Undo</button>}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

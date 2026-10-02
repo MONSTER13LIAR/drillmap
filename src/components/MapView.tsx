@@ -12,6 +12,8 @@ interface Props {
   floorId: string
   routes?: { route: Route }[]
   hotEdges?: Set<string> // edge ids where queues form, drawn red
+  hotNodes?: Set<string> // staircase heads where classes queue to step on: red ring, and the corridor into them red
+  words?: { staircase: string; people: string }
   status?: Record<string, NodeStatus>
   badges?: Record<string, string> // node id → small text under the label
   selectedId?: string | null
@@ -97,7 +99,7 @@ export function MapView(p: Props) {
       if (!a || !b || a.floorId !== p.floorId || b.floorId !== p.floorId) continue
       const k = `${a.id}>${b.id}`
       if (segMap.has(k)) continue
-      const hot = !!p.hotEdges?.has(route.links[i]?.id)
+      const hot = !!p.hotEdges?.has(route.links[i]?.id) || !!p.hotNodes?.has(b.id)
       segMap.set(k, { d: `M${a.x} ${a.y}L${(a.x + b.x) / 2} ${(a.y + b.y) / 2}L${b.x} ${b.y}`, hot })
     }
   }
@@ -161,14 +163,15 @@ export function MapView(p: Props) {
               p.onNodeDown?.(n.id, x, y)
             }}
           >
+            {p.hotNodes?.has(n.id) && <rect x={-27} y={-27} width={54} height={54} rx={10} className="stair-queue" />}
             <Glyph n={n} sel={p.selectedId === n.id} pending={p.pendingId === n.id} status={p.status?.[n.id]} />
             {n.kind !== 'room' && n.kind !== 'junction' && (
               <text className="node-label" textAnchor="middle" y={n.kind === 'assembly' ? 48 : 38}>
-                {n.kind === 'stair' ? `Staircase ${n.stairKey || n.label}` : n.label}
+                {n.kind === 'stair' ? `${p.words?.staircase || 'Staircase'} ${n.stairKey || n.label}` : n.label}
               </text>
             )}
             {n.kind === 'room' && n.headcount != null && !p.badges?.[n.id] && (
-              <text className="node-sub" textAnchor="middle" y={38}>{n.headcount} people</text>
+              <text className="node-sub" textAnchor="middle" y={38}>{n.headcount} {p.words?.people || 'people'}</text>
             )}
             {p.badges?.[n.id] && (
               <text className="node-sub" textAnchor="middle" y={n.kind === 'room' ? 38 : 56}>{p.badges[n.id]}</text>

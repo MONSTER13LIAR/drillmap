@@ -96,3 +96,7 @@ export async function drillAction(code: string, action: 'start' | 'end' | 'reset
 export async function postEvent(code: string, ev: Omit<DrillEvent, 'id' | 'at'> & { at?: number }): Promise<DrillEvent> {
   return j(await fetch(`/api/drills/${code}/events`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(ev) }))
 }
+
+export async function undoLast(code: string, roomId: string): Promise<{ removed: { id: string; type: string } | null }> {
+  return j(await fetch(`/api/drills/${code}/undo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roomId }) }))
+}

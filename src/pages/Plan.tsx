@@ -30,8 +30,11 @@ export function Plan({ id }: { id: string }) {
   const floors = [...school.floors].sort((a, b) => b.level - a.level)
   const floorOf = (roomId: string) => school.floors.find((f) => f.id === school.nodes.find((n) => n.id === roomId)?.floorId)?.name || ''
   const queues = [...current.links.values()].filter((u) => u.queueSec > 5).sort((a, b) => b.queueSec - a.queueSec).slice(0, 5)
-  // red on the map only where real queues form: the worst few corridor segments
-  const hotEdges = new Set([...current.links.values()].filter((u) => !u.link.isStair && u.queueSec >= 60).sort((a, b) => b.queueSec - a.queueSec).slice(0, 4).map((u) => u.link.id))
+  // red on the map only where real queues form: the worst few corridor segments or staircase heads.
+  // A stair link has no line of its own on any floor, so its queue is shown at the top of that flight (where classes wait to step on).
+  const worst = [...current.links.values()].filter((u) => u.queueSec >= 60).sort((a, b) => b.queueSec - a.queueSec).slice(0, 4)
+  const hotEdges = new Set(worst.filter((u) => !u.link.isStair).map((u) => u.link.id))
+  const hotNodes = new Set(worst.filter((u) => u.link.isStair).map((u) => u.link.b))
 
   if (!current.groups.length)
     return (
@@ -134,8 +137,8 @@ export function Plan({ id }: { id: string }) {
         return (
           <div key={f.id} className="stack">
             <h2>{f.name}</h2>
-            <MapView school={school} floorId={f.id} routes={passes.map((g) => ({ route: g.route }))} hotEdges={hotEdges} badges={badges} />
-            {f.id === floors[floors.length - 1].id && hotEdges.size > 0 && <p className="small muted">Red: where queues build up, just before a staircase or gate.</p>}
+            <MapView school={school} floorId={f.id} routes={passes.map((g) => ({ route: g.route }))} hotEdges={hotEdges} hotNodes={hotNodes} badges={badges} />
+            {f.id === floors[floors.length - 1].id && hotEdges.size + hotNodes.size > 0 && <p className="small muted">Red: where queues build up. A red ring on a staircase means classes wait there to step on.</p>}
           </div>
         )
       })}

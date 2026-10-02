@@ -72,13 +72,13 @@ app.post('/api/drills/:code/events', wrap(async (req, res) => {
   const code = codeOf(req)
   const d = await store.getDrill(code)
   if (!d) return res.status(404).send('No such drill')
-  const { type, roomId, at, present } = req.body || {}
+  const { type, roomId, at, present, by } = req.body || {}
   if (!TYPES.has(type) || !d.expected[roomId]) return res.status(400).send('Bad event')
   if (!d.startedAt) return res.status(409).send('The drill has not started')
   const now = Date.now()
   // a tap queued offline carries the phone's estimate of server time; trust it only inside the drill window
   const stamp = typeof at === 'number' && at >= d.startedAt && at <= now + 2000 ? Math.round(Math.min(at, now)) : now
-  const ev = { id: Math.random().toString(36).slice(2, 12), type, roomId, at: stamp }
+  const ev = { id: Math.random().toString(36).slice(2, 12), type, roomId, at: stamp, ...(by === 'coordinator' ? { by } : {}) }
   if (type === 'headcount') {
     const n = Number(present)
     if (!Number.isFinite(n) || n < 0 || n > 500) return res.status(400).send('Bad headcount')
@@ -86,6 +86,16 @@ app.post('/api/drills/:code/events', wrap(async (req, res) => {
   }
   await store.addEvent(code, ev)
   res.json(ev)
+}))
+
+// take back the latest step of one class (a mistaken tap), from the monitor's phone or the coordinator
+app.post('/api/drills/:code/undo', wrap(async (req, res) => {
+  const code = codeOf(req)
+  const d = await store.getDrill(code)
+  if (!d) return res.status(404).send('No such drill')
+  if (!d.expected[req.body?.roomId]) return res.status(400).send('Unknown class')
+  if (d.endedAt) return res.status(409).send('The drill has ended')
+  res.json({ removed: await store.undoLast(code, req.body.roomId) })
 }))
 
 app.post('/api/drills/:code/:action', wrap(async (req, res, next) => {

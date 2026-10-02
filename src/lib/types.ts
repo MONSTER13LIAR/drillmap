@@ -67,6 +67,7 @@ export interface DrillEvent {
   at: number // server ms
   present?: number
   device?: string
+  by?: 'coordinator' // marked by hand on the coordinator's screen
 }
 
 export interface Drill {

@@ -322,3 +322,16 @@ td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numer
 @media (max-width: 800px) { .h-start { grid-template-columns: 1fr; } }
 .h-foot { border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
 .h-foot .quote { max-width: 80ch; }
+
+/* English / Hindi switch (monitor phone, print page) */
+.langtoggle { display: inline-flex; align-self: flex-end; border: 1px solid var(--line); border-radius: 99px; padding: 2px; background: #fff; }
+.langtoggle button { border: 0; background: transparent; border-radius: 99px; padding: 4px 12px; font-size: 13px; color: var(--ink-2); }
+.langtoggle button.on { background: var(--ink); color: #fff; }
+.phone .undo { align-self: center; color: var(--ink-2); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+/* coordinator marks a class by hand when its phone is silent */
+.markbtns { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.markbtns button { padding: 3px 8px; font-size: 12px; }
+.byhand { font-size: 11px; color: var(--warn); margin-left: 4px; }
+/* queue at a staircase head: red ring on the stair node */
+.stair-queue { fill: none; stroke: var(--alert); stroke-width: 3; }
+:lang(hi) { font-family: inherit; }
