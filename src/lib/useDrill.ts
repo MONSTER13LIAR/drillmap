@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { getDrill } from './api'
-import type { Drill } from './types'
+import { getDrill, type DrillView } from './api'
 
 // Live drill state by polling (works on serverless hosting), plus the offset between this device's clock and the server's.
-export function useDrill(code: string, everyMs = 1500) {
-  const [drill, setDrill] = useState<Drill | null>(null)
+export function useDrill(code: string, everyMs = 1500, room?: string | null) {
+  const [drill, setDrill] = useState<DrillView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [online, setOnline] = useState(true)
   const offset = useRef(0)
@@ -16,7 +15,7 @@ export function useDrill(code: string, everyMs = 1500) {
     const load = async () => {
       try {
         const t0 = Date.now()
-        const d = await getDrill(code)
+        const d = await getDrill(code, room || undefined)
         if (!live) return
         // server time at the midpoint of the request
         offset.current = d.now - (t0 + Date.now()) / 2
@@ -37,7 +36,7 @@ export function useDrill(code: string, everyMs = 1500) {
       live = false
       window.clearTimeout(timer)
     }
-  }, [code, everyMs])
+  }, [code, everyMs, room])
 
   const serverNow = () => Math.round(Date.now() + offset.current)
   return { drill, setDrill, error, online, serverNow }

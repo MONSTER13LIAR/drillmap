@@ -9,12 +9,13 @@ type Queued = { type: DrillEventType; roomId: string; at: number; present?: numb
 
 // The monitor's phone. Big buttons, works one-handed, keeps taps if the network drops.
 export function Monitor({ code }: { code: string }) {
-  const { drill, setDrill, error, online, serverNow } = useDrill(code)
+  const key = `drillmap:m:${code}`
+  const [roomId, setRoomId] = useState<string | null>(() => localStorage.getItem(key))
+  // the phone sees the class list and its own class's taps only
+  const { drill, setDrill, error, online, serverNow } = useDrill(code, 1500, roomId)
   const [lang, setLang] = useLang()
   const t = T[lang]
   const [undoing, setUndoing] = useState(false)
-  const key = `drillmap:m:${code}`
-  const [roomId, setRoomId] = useState<string | null>(() => localStorage.getItem(key))
   const [present, setPresent] = useState<number | null>(null)
   const [queue, setQueue] = useState<Queued[]>(() => {
     try { return JSON.parse(localStorage.getItem(key + ':q') || '[]') } catch { return [] }
@@ -121,7 +122,7 @@ export function Monitor({ code }: { code: string }) {
     try {
       await undoLast(code, roomId)
       setSent((x) => x.filter((q) => !(q.roomId === roomId && q.type === lastStep)))
-      setDrill(await getDrill(code))
+      setDrill(await getDrill(code, roomId))
       if (lastStep === 'headcount') setPresent(null)
     } catch {
       alert(lang === 'hi' ? 'अभी रद्द नहीं हो सका। नेटवर्क जाँचें।' : 'Could not undo right now. Check the network.')

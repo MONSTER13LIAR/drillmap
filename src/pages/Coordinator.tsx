@@ -23,6 +23,13 @@ export function Coordinator({ code }: { code: string }) {
 
   if (error) return <main className="page"><p>Drill not found: {error}</p></main>
   if (!drill) return <main className="page"><p className="muted">Loading drill…</p></main>
+  if (!drill.full)
+    return (
+      <main className="page stack">
+        <h1>This board is private</h1>
+        <p className="muted">Open it on the device that made the school, or open the school's private edit link here first. Monitors join at <a href={`#/m/${code}`}>the monitor page</a> with the drill code.</p>
+      </main>
+    )
 
   const rows = classRows(drill)
   const now = serverNow()

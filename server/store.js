@@ -4,6 +4,7 @@ import path from 'node:path'
 
 const SCHEMA = [
   `create table if not exists schools (id text primary key, data jsonb not null, updated_at bigint not null)`,
+  `alter table schools add column if not exists key_hash text`,
   `create table if not exists drills (code text primary key, school_id text not null, data jsonb not null, created_at bigint not null, started_at bigint, ended_at bigint)`,
   `create index if not exists drills_school on drills (school_id)`,
   `create table if not exists drill_events (id text primary key, code text not null, type text not null, room_id text not null, at bigint not null, present int)`,
@@ -38,19 +39,32 @@ function pgStore(url) {
     }
   }
   return {
-    async listSchools() {
+    async keyHash(id) {
       const q = await sql()
-      const rows = await q.query(`select id, data->>'name' as name, updated_at from schools order by updated_at desc`)
-      return rows.map((r) => ({ id: r.id, name: r.name, updatedAt: Number(r.updated_at) }))
+      const rows = await q.query(`select key_hash from schools where id = $1`, [id])
+      return rows.length ? rows[0].key_hash || '' : null
+    },
+    async setKeyHash(id, hash) {
+      const q = await sql()
+      await q.query(`update schools set key_hash = $2 where id = $1`, [id, hash])
+    },
+    async allIds() {
+      const q = await sql()
+      return (await q.query(`select id from schools`)).map((r) => r.id)
     },
     async getSchool(id) {
       const q = await sql()
       const rows = await q.query(`select data from schools where id = $1`, [id])
       return rows[0]?.data || null
     },
+    async createSchool(s, hash) {
+      const q = await sql()
+      const r = await q.query(`insert into schools (id, data, updated_at, key_hash) values ($1, $2, $3, $4) on conflict do nothing returning id`, [s.id, JSON.stringify(s), s.updatedAt, hash])
+      return r.length > 0
+    },
     async putSchool(s) {
       const q = await sql()
-      await q.query(`insert into schools (id, data, updated_at) values ($1, $2, $3) on conflict (id) do update set data = excluded.data, updated_at = excluded.updated_at`, [s.id, JSON.stringify(s), s.updatedAt])
+      await q.query(`update schools set data = $2, updated_at = $3 where id = $1`, [s.id, JSON.stringify(s), s.updatedAt])
     },
     async deleteSchool(id) {
       const q = await sql()
@@ -103,6 +117,7 @@ function pgStore(url) {
 function fileStore(dir) {
   fs.mkdirSync(path.join(dir, 'schools'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'drills'), { recursive: true })
+  fs.mkdirSync(path.join(dir, 'keys'), { recursive: true })
   const read = (sub, id) => {
     try { return JSON.parse(fs.readFileSync(path.join(dir, sub, `${id}.json`), 'utf8')) } catch { return null }
   }
@@ -113,10 +128,16 @@ function fileStore(dir) {
   }
   const all = (sub) => fs.readdirSync(path.join(dir, sub)).filter((f) => f.endsWith('.json')).map((f) => read(sub, f.slice(0, -5))).filter(Boolean)
   return {
-    async listSchools() { return all('schools').map((s) => ({ id: s.id, name: s.name, updatedAt: s.updatedAt })) },
+    async keyHash(id) { return read('schools', id) ? read('keys', id)?.hash || '' : null },
+    async setKeyHash(id, hash) { write('keys', id, { hash }) },
+    async allIds() { return all('schools').map((s) => s.id) },
     async getSchool(id) { return read('schools', id) },
+    async createSchool(s, hash) { if (read('schools', s.id)) return false; write('keys', s.id, { hash }); write('schools', s.id, s); return true },
     async putSchool(s) { write('schools', s.id, s) },
-    async deleteSchool(id) { fs.rmSync(path.join(dir, 'schools', `${id}.json`), { force: true }) },
+    async deleteSchool(id) {
+      fs.rmSync(path.join(dir, 'schools', `${id}.json`), { force: true })
+      fs.rmSync(path.join(dir, 'keys', `${id}.json`), { force: true })
+    },
     async createDrill(d) { if (read('drills', d.code)) return false; write('drills', d.code, d); return true },
     async getDrill(code) { return read('drills', code) },
     async listDrills(schoolId) { return all('drills').filter((d) => d.schoolId === schoolId).sort((a, b) => b.createdAt - a.createdAt) },

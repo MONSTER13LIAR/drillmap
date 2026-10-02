@@ -335,3 +335,8 @@ td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numer
 /* queue at a staircase head: red ring on the stair node */
 .stair-queue { fill: none; stroke: var(--alert); stroke-width: 3; }
 :lang(hi) { font-family: inherit; }
+
+/* private edit link */
+.keybar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.keybar input { flex: 1 1 260px; min-width: 0; font-family: ui-monospace, monospace; font-size: 12px; padding: 6px 8px; }
+@media (max-width: 640px) { .keybar { padding: 8px 12px; } }

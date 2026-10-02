@@ -25,6 +25,13 @@ export function Report({ code }: { code: string }) {
 
   if (error) return <main className="page"><p>Drill not found: {error}</p></main>
   if (!drill) return <main className="page"><p className="muted">Loading…</p></main>
+  if (!drill.full)
+    return (
+      <main className="page stack">
+        <h1>This report is private</h1>
+        <p className="muted">Open it on the device that made the school, or open the school's private edit link here first. Monitors join at <a href={`#/m/${code}`}>the monitor page</a> with the drill code.</p>
+      </main>
+    )
   if (!drill.startedAt) return <main className="page"><p>This drill has not started yet. <a href={`#/d/${code}`}>Open it</a></p></main>
 
   const st = school ? settingsOf(school) : { targetSec: 180, reactionSec: 20 }
