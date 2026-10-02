@@ -5,7 +5,7 @@ import { getSchool, saveSchool } from './api'
 export function useSchool(id: string) {
   const [school, setSchool] = useState<School | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'offline'>('idle')
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'offline' | 'local'>('idle')
   const timer = useRef<number | undefined>(undefined)
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export function useSchool(id: string) {
       window.clearTimeout(timer.current)
       setSaving('saving')
       timer.current = window.setTimeout(() => {
-        saveSchool(next).then(() => setSaving('saved')).catch(() => setSaving('offline'))
+        saveSchool(next).then(() => setSaving('saved')).catch((e) => setSaving(e?.message === 'local' ? 'local' : 'offline'))
       }, 500)
       return next
     })

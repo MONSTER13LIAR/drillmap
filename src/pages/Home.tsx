@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { MapView } from '../components/MapView'
-import { deleteSchool, listSchools, saveSchool } from '../lib/api'
+import { deleteSchool, listSchools, saveSchool, serverStorage } from '../lib/api'
 import { demoSchool } from '../lib/demo'
 import { fmt } from '../lib/graph'
 import { uid } from '../lib/id'
@@ -15,8 +15,10 @@ export function Home() {
   const floors = useMemo(() => [...demo.floors].sort((a, b) => a.level - b.level), [demo])
   const [floorId, setFloorId] = useState(floors[0].id)
 
+  const [shared, setShared] = useState(true)
   useEffect(() => {
     listSchools().then(setSchools)
+    serverStorage().then(setShared)
   }, [])
 
   const create = async (s: School) => {
@@ -205,6 +207,7 @@ export function Home() {
         </div>
         <div className="start-list">
           <h3>Your schools</h3>
+          {!shared && <p className="small faint">Saved in this browser only. Live drills need the shared database, which this site is still waiting on.</p>}
           {!schools && <p className="muted">Loading…</p>}
           {schools && !schools.length && <p className="muted">None yet.</p>}
           {schools?.sort((a, b) => b.updatedAt - a.updatedAt).map((s) => (

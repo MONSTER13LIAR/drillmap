@@ -16,7 +16,7 @@ app.use((req, res, next) => {
   next()
 })
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, now: Date.now() }))
+app.get('/api/health', (_req, res) => res.json({ ok: true, now: Date.now(), storage: store.kind }))
 
 app.get('/api/schools', wrap(async (_req, res) => res.json(await store.listSchools())))
 app.get('/api/schools/:id', wrap(async (req, res) => {

@@ -245,7 +245,7 @@ export function Editor({ id }: { id: string }) {
             + Floor
           </button>
           </div>
-          <span className="small faint save">{saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : saving === 'offline' ? 'Saved on this device only' : ''}</span>
+          <span className="small faint save">{saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : saving === 'local' ? 'Saved in this browser' : saving === 'offline' ? 'Server unreachable, saved in this browser' : ''}</span>
         </div>
         <div className="hint">
           <b>{floor.name}</b> · {hint}

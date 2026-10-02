@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createDrill, listDrills } from '../lib/api'
+import { createDrill, listDrills, serverStorage } from '../lib/api'
 import { fmt } from '../lib/graph'
 import { analyse } from '../lib/report'
 import type { Drill } from '../lib/types'
@@ -13,6 +13,8 @@ export function Drills({ id }: { id: string }) {
   const [drills, setDrills] = useState<Drill[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [shared, setShared] = useState(true)
+  useEffect(() => { serverStorage().then(setShared) }, [])
 
   useEffect(() => {
     listDrills(id).then(setDrills).catch(() => setDrills([]))
@@ -34,7 +36,8 @@ export function Drills({ id }: { id: string }) {
       const d = await createDrill(school.id, expected, assembly)
       location.hash = `#/d/${d.code}`
     } catch (e) {
-      setErr('Could not reach the server. A drill needs a connection so monitors’ phones can report in.')
+      const m = String((e as Error)?.message || '')
+      setErr(/school/i.test(m) ? 'The server has no copy of this school yet. Make one edit on the map so it saves, then try again.' : 'Could not reach the server. A drill needs a connection so monitors’ phones can report in.')
       setBusy(false)
     }
   }
@@ -49,8 +52,10 @@ export function Drills({ id }: { id: string }) {
         <h2>New drill</h2>
         <p className="small muted">Uses the current plan: {plan.current.groups.length} classes, planned {fmt(plan.current.totalSec)}.</p>
         <div className="row">
-          <button className="primary" disabled={busy || !plan.current.groups.length} onClick={start}>Set up a drill</button>
+          <button className="primary" disabled={busy || !shared || !plan.current.groups.length} onClick={start}>Set up a drill</button>
         </div>
+        {!shared && <p className="small" style={{ color: 'var(--alert)' }}>Live drills are switched off on this site for now: monitors’ phones need a shared database to report to, and it is not connected yet. Your map and plan are saved in this browser.</p>}
+        {!plan.current.groups.length && <p className="small muted">Add classes on the map first.</p>}
         {err && <p className="small" style={{ color: 'var(--alert)' }}>{err}</p>}
       </div>
       <div className="card stack">
