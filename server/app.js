@@ -77,7 +77,7 @@ app.post('/api/drills/:code/events', wrap(async (req, res) => {
   if (!d.startedAt) return res.status(409).send('The drill has not started')
   const now = Date.now()
   // a tap queued offline carries the phone's estimate of server time; trust it only inside the drill window
-  const stamp = typeof at === 'number' && at >= d.startedAt && at <= now + 2000 ? Math.min(at, now) : now
+  const stamp = typeof at === 'number' && at >= d.startedAt && at <= now + 2000 ? Math.round(Math.min(at, now)) : now
   const ev = { id: Math.random().toString(36).slice(2, 12), type, roomId, at: stamp }
   if (type === 'headcount') {
     const n = Number(present)

@@ -39,7 +39,7 @@ export function useDrill(code: string, everyMs = 1500) {
     }
   }, [code, everyMs])
 
-  const serverNow = () => Date.now() + offset.current
+  const serverNow = () => Math.round(Date.now() + offset.current)
   return { drill, setDrill, error, online, serverNow }
 }
 
