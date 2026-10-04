@@ -3,6 +3,7 @@ import { MapView } from '../components/MapView'
 import { WalkModal } from '../components/WalkModal'
 import { edgeMeters, nodeLabel, settingsOf, validate } from '../lib/graph'
 import { uid } from '../lib/id'
+import { AREA_TYPES, ROOM_TYPES, typeKey, typeName, typesFor } from '../lib/places'
 import type { MapNode, NodeKind, School } from '../lib/types'
 import { useSchool } from '../lib/useSchool'
 
@@ -10,11 +11,11 @@ type Tool = 'select' | NodeKind | 'connect' | 'scale' | 'delete'
 
 const TOOLS: [Tool, string, string, string][] = [
   ['select', 'Move / select', 'V', 'Drag things around. Click to edit.'],
-  ['room', 'Classroom', 'R', 'Click where the classroom door is.'],
+  ['room', 'Room', 'R', 'Click where the room door is. Pick the kind of room above the map.'],
   ['junction', 'Corridor point', 'J', 'Click corners and junctions of corridors.'],
   ['stair', 'Staircase', 'S', 'Same letter on every floor = same staircase.'],
   ['exit', 'Exit / gate', 'E', 'Doors and gates people leave the building through.'],
-  ['assembly', 'Assembly point', 'A', 'Where everyone gathers. Usually the ground or playground.'],
+  ['assembly', 'Open area', 'A', 'Where everyone gathers: assembly point, ground, playground, garden or park. Pick the kind above the map.'],
   ['connect', 'Connect', 'C', 'Click one point, then the next. Keeps chaining until Esc.'],
   ['scale', 'Set scale', 'M', 'Click two points you know the distance between.'],
   ['delete', 'Delete', 'X', 'Click a point or a connection to remove it.'],
@@ -34,7 +35,7 @@ const ICON: Record<Tool, React.ReactNode> = {
   scale: I('M3 17L17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2'),
   delete: I('M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13'),
 }
-const SHORT: Record<Tool, string> = { select: 'Move', room: 'Class', junction: 'Corridor', stair: 'Stairs', exit: 'Exit', assembly: 'Assembly', connect: 'Connect', scale: 'Scale', delete: 'Delete' }
+const SHORT: Record<Tool, string> = { select: 'Move', room: 'Room', junction: 'Corridor', stair: 'Stairs', exit: 'Exit', assembly: 'Open area', connect: 'Connect', scale: 'Scale', delete: 'Delete' }
 
 async function compress(file: File): Promise<string> {
   const img = await createImageBitmap(file)
@@ -63,6 +64,8 @@ export function Editor({ id }: { id: string }) {
   const [scalePts, setScalePts] = useState<number[] | null>(null)
   const [scaleAsk, setScaleAsk] = useState<number | null>(null)
   const [walkEdge, setWalkEdge] = useState<string | null>(null)
+  const [roomType, setRoomType] = useState('classroom')
+  const [areaType, setAreaType] = useState('assembly')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -128,6 +131,10 @@ export function Editor({ id }: { id: string }) {
     }
     const kind = tool as NodeKind
     const count = school.nodes.filter((n) => n.kind === kind).length + 1
+    const pt = kind === 'room' ? roomType : kind === 'assembly' ? areaType : undefined
+    const ptName = typesFor(kind).find((t) => t.key === pt)?.name
+    const sameType = school.nodes.filter((n) => n.kind === kind && typeKey(n) === pt).length
+    const named = ptName && pt !== 'classroom' ? (sameType ? `${ptName} ${sameType + 1}` : ptName) : ''
     const n: MapNode = {
       id: uid('n'),
       floorId: floor.id,
@@ -135,9 +142,10 @@ export function Editor({ id }: { id: string }) {
       x,
       y,
       label:
-        kind === 'room' ? `Room ${count}` : kind === 'junction' ? `C${count}` : kind === 'exit' ? `Gate ${count}` : kind === 'assembly' ? 'Assembly point' : '',
+        kind === 'room' ? named || `Room ${count}` : kind === 'junction' ? `C${count}` : kind === 'exit' ? `Gate ${count}` : kind === 'assembly' ? named || 'Assembly point' : '',
     }
-    if (kind === 'room') n.headcount = 40
+    if (pt && pt !== 'classroom' && pt !== 'assembly') n.placeType = pt
+    if (kind === 'room' && pt === 'classroom') n.headcount = 40
     if (kind === 'stair') {
       n.stairKey = nextStairKey(school, floor.id)
       n.label = n.stairKey
@@ -251,6 +259,14 @@ export function Editor({ id }: { id: string }) {
           <b>{floor.name}</b> · {hint}
           {tool === 'connect' && pending && <> · from <b>{nodeLabel(school.nodes.find((n) => n.id === pending)!)}</b></>}
         </div>
+        {(tool === 'room' || tool === 'assembly') && (
+          <label className="field" style={{ margin: '0 0 8px', maxWidth: 320 }}>
+            {tool === 'room' ? 'Kind of room to add' : 'Kind of open area to add'}
+            <select value={tool === 'room' ? roomType : areaType} onChange={(e) => (tool === 'room' ? setRoomType : setAreaType)(e.target.value)}>
+              {(tool === 'room' ? ROOM_TYPES : AREA_TYPES).map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
+            </select>
+          </label>
+        )}
         <MapView
           school={school}
           floorId={floor.id}
@@ -288,7 +304,15 @@ export function Editor({ id }: { id: string }) {
       <aside className="stack right">
         {selNode && (
           <div className="card stack">
-            <h3>{selNode.kind === 'room' ? 'Classroom' : selNode.kind === 'stair' ? 'Staircase' : selNode.kind === 'exit' ? 'Exit' : selNode.kind === 'assembly' ? 'Assembly point' : 'Corridor point'}</h3>
+            <h3>{selNode.kind === 'room' || selNode.kind === 'assembly' ? typeName(selNode) : selNode.kind === 'stair' ? 'Staircase' : selNode.kind === 'exit' ? 'Exit' : 'Corridor point'}</h3>
+            {(selNode.kind === 'room' || selNode.kind === 'assembly') && (
+              <label className="field">
+                Kind
+                <select value={typeKey(selNode)} onChange={(e) => setNode(selNode.id, { placeType: e.target.value === 'classroom' || e.target.value === 'assembly' ? undefined : e.target.value })}>
+                  {typesFor(selNode.kind).map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
+                </select>
+              </label>
+            )}
             {selNode.kind !== 'stair' && (
               <label className="field">
                 Name
@@ -300,6 +324,21 @@ export function Editor({ id }: { id: string }) {
                 People who leave from here
                 <input type="number" min={0} value={selNode.headcount ?? 0} onChange={(e) => setNode(selNode.id, { headcount: parseInt(e.target.value) || 0 })} />
               </label>
+            )}
+            {(selNode.kind === 'room' || selNode.kind === 'assembly') && (
+              <>
+                <div className="row" style={{ flexWrap: 'nowrap', gap: 8 }}>
+                  <label className="field" style={{ flex: 1 }}>
+                    Width (m)
+                    <input type="number" step={0.5} min={1} value={selNode.sizeW ?? ''} onChange={(e) => setNode(selNode.id, { sizeW: parseFloat(e.target.value) || undefined })} />
+                  </label>
+                  <label className="field" style={{ flex: 1 }}>
+                    Length (m)
+                    <input type="number" step={0.5} min={1} value={selNode.sizeL ?? ''} onChange={(e) => setNode(selNode.id, { sizeL: parseFloat(e.target.value) || undefined })} />
+                  </label>
+                </div>
+                <p className="small faint">{floor.pxPerMeter ? 'Drawn to scale on the map once both are filled.' : 'Set the scale first (Scale tool) to see it drawn to scale.'}</p>
+              </>
             )}
             {selNode.kind === 'stair' && (
               <label className="field">

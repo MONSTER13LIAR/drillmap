@@ -10,6 +10,9 @@ export interface MapNode {
   headcount?: number // rooms: people who evacuate from here
   stairKey?: string // stairs: same key on different floors = same staircase
   widthM?: number // stairs / exits: clear width in metres
+  placeType?: string // rooms and open areas: see lib/places.ts
+  sizeW?: number // rooms and open areas: width in metres
+  sizeL?: number // rooms and open areas: length in metres
 }
 
 export interface MapEdge {

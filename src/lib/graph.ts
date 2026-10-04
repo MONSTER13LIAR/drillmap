@@ -1,4 +1,5 @@
 import type { MapEdge, MapNode, School, Settings } from './types'
+import { isClassroom } from './places'
 import { DEFAULT_SETTINGS } from './types'
 
 // A link is a walkable segment: either a drawn edge on one floor, or one storey of a staircase.
@@ -379,8 +380,8 @@ export function validate(s: School): Check[] {
   if (!s.nodes.some((n) => n.kind === 'assembly')) out.push({ level: 'error', text: 'No assembly point yet. Add one where everyone gathers.' })
   if (!s.nodes.some((n) => n.kind === 'exit')) out.push({ level: 'warn', text: 'No exit marked. Mark the gates or doors people leave the building through.' })
   if (!rooms.length) out.push({ level: 'warn', text: 'No classrooms yet.' })
-  const noHead = rooms.filter((r) => !r.headcount)
-  if (noHead.length) out.push({ level: 'warn', text: `${noHead.length} room(s) have no headcount: ${noHead.map((r) => r.label).join(', ')}` })
+  const noHead = rooms.filter((r) => isClassroom(r) && !r.headcount)
+  if (noHead.length) out.push({ level: 'warn', text: `${noHead.length} classroom(s) have no headcount: ${noHead.map((r) => r.label).join(', ')}` })
   if (s.nodes.some((n) => n.kind === 'assembly')) {
     const cache = allCandidates(s)
     const stuck = rooms.filter((r) => (r.headcount ?? 0) > 0 && !(cache.get(r.id) || []).length)

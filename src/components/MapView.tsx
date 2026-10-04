@@ -30,7 +30,23 @@ interface Props {
 
 const R = { room: 26, junction: 7, stair: 20, exit: 18, assembly: 30 }
 
-function Glyph({ n, sel, pending, status }: { n: MapNode; sel: boolean; pending: boolean; status?: NodeStatus }) {
+// Rooms and open areas are drawn to scale once a width and length are typed in and the floor scale is set.
+// Rooms never shrink below a readable label box; areas never below the old assembly circle.
+function boxOf(n: MapNode, ppm: number | undefined) {
+  const labelW = Math.max(68, n.label.length * 8 + 18)
+  const k = ppm || 10
+  const scaled = n.sizeW && n.sizeL
+  if (n.kind === 'room') {
+    const w = scaled ? Math.min(420, Math.max(labelW, n.sizeW! * k)) : labelW
+    const h = scaled ? Math.min(300, Math.max(44, n.sizeL! * k)) : 44
+    return { w, h }
+  }
+  const w = scaled ? Math.min(700, Math.max(60, n.sizeW! * k)) : 60
+  const h = scaled ? Math.min(500, Math.max(60, n.sizeL! * k)) : 60
+  return { w, h }
+}
+
+function Glyph({ n, sel, pending, status, ppm }: { n: MapNode; sel: boolean; pending: boolean; status?: NodeStatus; ppm?: number }) {
   const stroke = sel || pending ? 'var(--ink)' : undefined
   const sw = sel || pending ? 3 : 1.5
   if (n.kind === 'junction') return <circle r={R.junction} fill="#fff" stroke={stroke || '#9aa0a6'} strokeWidth={sw} />
@@ -41,10 +57,11 @@ function Glyph({ n, sel, pending, status }: { n: MapNode; sel: boolean; pending:
     if (status === 'moving') { fill = '#fff'; st = 'var(--accent)' }
     if (status === 'arrived') { fill = 'var(--accent)'; st = 'var(--accent)'; text = '#fff' }
     if (status === 'silent') { fill = 'var(--alert-soft)'; st = 'var(--alert)' }
+    const { w, h } = boxOf(n, ppm)
     return (
       <g>
-        <rect x={-34} y={-22} width={68} height={44} rx={8} fill={fill} stroke={st} strokeWidth={status === 'moving' ? 3.5 : sw} />
-        {status === 'moving' && <rect x={-34} y={-22} width={68} height={44} rx={8} fill="none" stroke="var(--accent)" strokeWidth={2} className="pulse" />}
+        <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={8} fill={fill} stroke={st} strokeWidth={status === 'moving' ? 3.5 : sw} />
+        {status === 'moving' && <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={8} fill="none" stroke="var(--accent)" strokeWidth={2} className="pulse" />}
         <text textAnchor="middle" y={5} fontSize={14} fontWeight={650} fill={text} style={{ pointerEvents: 'none' }}>{n.label}</text>
       </g>
     )
@@ -63,6 +80,15 @@ function Glyph({ n, sel, pending, status }: { n: MapNode; sel: boolean; pending:
         <path d="M-8 -7h9M-8 0h13M-8 7h9M3 -4l4 4-4 4" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
       </g>
     )
+  if (n.sizeW && n.sizeL) {
+    const { w, h } = boxOf(n, ppm)
+    return (
+      <g>
+        <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={14} fill="var(--accent-soft)" fillOpacity={0.6} stroke={stroke || 'var(--accent)'} strokeWidth={2} strokeDasharray="5 4" />
+        <circle r={6} fill="var(--accent)" />
+      </g>
+    )
+  }
   return (
     <g>
       <circle r={R.assembly} fill="var(--accent-soft)" stroke={stroke || 'var(--accent)'} strokeWidth={2} strokeDasharray="5 4" />
@@ -164,17 +190,17 @@ export function MapView(p: Props) {
             }}
           >
             {p.hotNodes?.has(n.id) && <rect x={-27} y={-27} width={54} height={54} rx={10} className="stair-queue" />}
-            <Glyph n={n} sel={p.selectedId === n.id} pending={p.pendingId === n.id} status={p.status?.[n.id]} />
+            <Glyph n={n} sel={p.selectedId === n.id} pending={p.pendingId === n.id} status={p.status?.[n.id]} ppm={floor?.pxPerMeter} />
             {n.kind !== 'room' && n.kind !== 'junction' && (
-              <text className="node-label" textAnchor="middle" y={n.kind === 'assembly' ? 48 : 38}>
+              <text className="node-label" textAnchor="middle" y={n.kind === 'assembly' ? boxOf(n, floor?.pxPerMeter).h / 2 + 18 : 38}>
                 {n.kind === 'stair' ? `${p.words?.staircase || 'Staircase'} ${n.stairKey || n.label}` : n.label}
               </text>
             )}
             {n.kind === 'room' && n.headcount != null && !p.badges?.[n.id] && (
-              <text className="node-sub" textAnchor="middle" y={38}>{n.headcount} {p.words?.people || 'people'}</text>
+              <text className="node-sub" textAnchor="middle" y={boxOf(n, floor?.pxPerMeter).h / 2 + 16}>{n.headcount} {p.words?.people || 'people'}{n.sizeW && n.sizeL ? ` · ${n.sizeW}×${n.sizeL} m` : ''}</text>
             )}
             {p.badges?.[n.id] && (
-              <text className="node-sub" textAnchor="middle" y={n.kind === 'room' ? 38 : 56}>{p.badges[n.id]}</text>
+              <text className="node-sub" textAnchor="middle" y={n.kind === 'room' ? boxOf(n, floor?.pxPerMeter).h / 2 + 16 : boxOf(n, floor?.pxPerMeter).h / 2 + 36}>{p.badges[n.id]}</text>
             )}
           </g>
         ))}
